@@ -44,6 +44,17 @@ mis_table = {
     "T": "ACG"
 }
 
+complement_table = {
+    "A": "T",
+    "C": "G",
+    "G": "C",
+    "T": "A"
+}
+
+
+def make_complement(kmer):
+    return "".join(reversed(list(map(lambda x: complement_table[x], kmer))))
+
 
 def kmer_variations(kmer, d):
     variations = [kmer]
@@ -59,10 +70,12 @@ def kmer_variations(kmer, d):
     return variations
 
 
-def approximate_pattern_matching(text, k, d):
+def approximate_pattern_matching(text, k, d, complement=False):
     words = collections.defaultdict(int)
     for i in range(len(text) - k + 1):
         words[text[i:i + k]] += 1
+        if complement:
+            words[make_complement(text[i:i + k])] += 1
 
     # now all mismatch
     variations = collections.defaultdict(int)
@@ -80,12 +93,15 @@ def approximate_pattern_matching(text, k, d):
 @click.option(
     "--fin",
     type=str,
-    default="problem4_input.tsv")
-def main(fin):
+    default="problem5_input.tsv")
+@click.option(
+    "--complement/--usual",
+    default=True)
+def main(fin, complement):
     df = pd.read_csv(fin, sep="\t")
     assert all(x in df.columns.values.tolist() for x in ["text", "k", "d"])
     for i, row in df.iterrows():
-        print(approximate_pattern_matching(row["text"], row["k"], row["d"]))
+        print(approximate_pattern_matching(row["text"], row["k"], row["d"], complement=complement))
 
 
 if __name__ == '__main__':
