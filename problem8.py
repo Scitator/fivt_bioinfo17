@@ -3,6 +3,7 @@ import pandas as pd
 import click
 import collections
 import itertools
+from joblib import Parallel, delayed
 
 
 dnas = "ACGT"
@@ -48,23 +49,44 @@ def most_prob_row_kmer(row, profile, k):
     return most_prob_motif
 
 
-def greedy_motif_search(k, t, dna):
+def random_kmer(row, k):
+    index = np.random.randint(len(row) - k + 1)
+    return row[index:index+k]
+
+
+def make_motifs(profile, dna, k):
+    motifs = []
+    for row in dna:
+        most_prob_motif = most_prob_row_kmer(row, profile, k)
+        motifs.append(most_prob_motif)
+    motifs = np.array(motifs)
+    return motifs
+
+
+def randomized_motif_search(k, t, dna):
     """
     - great time to start write docs!
     - No.
     """
-    dna = np.array([dna2id[x] for x in dna]).reshape((t, -1))
-    best_motifs = dna[:, :k]
-    row_len = dna.shape[1]
-    for i in range(row_len - k + 1):
-        motifs = [dna[0, i:i+k]]
-        for row in dna[1:]:
-            profile = make_profile(motifs).T
-            most_prob_motif = most_prob_row_kmer(row, profile, k)
-            motifs.append(most_prob_motif)
-        motifs = np.array(motifs)
-        if score(motifs) < score(best_motifs):
+    motifs = np.vstack(list(map(lambda x: random_kmer(x, k), dna)))
+    best_motifs = motifs.copy()
+    while True:
+        profile = make_profile(motifs).T
+        motifs = make_motifs(profile, dna, k)
+        curr_score = score(best_motifs)
+        new_score = score(motifs)
+        if new_score < curr_score:
             best_motifs = motifs
+        else:
+            return best_motifs, curr_score
+
+
+def randomized_motif_search_runner(k, t, dna, t_max=1000, seed=42, n_jobs=-1):
+    np.random.seed(seed)
+    dna = np.array([dna2id[x] for x in dna]).reshape((t, -1))
+    mofits = Parallel(n_jobs)(t_max * [delayed(randomized_motif_search)(k, t, dna)])
+    mofits, scores = map(np.array, zip(*mofits))
+    best_motifs = mofits[scores.argmin()] 
     result = ["".join(id2dna[x] for x in motif) for motif in best_motifs]
     return "\n".join(result)
 
@@ -73,12 +95,12 @@ def greedy_motif_search(k, t, dna):
 @click.option(
     "--fin",
     type=str,
-    default="problem6_input.tsv")
+    default="problem8_input.tsv")
 def main(fin):
     df = pd.read_csv(fin, sep="\t")
     assert all(x in df.columns.values.tolist() for x in ["k", "t", "dna"])
     for i, row in df.iterrows():
-        print(greedy_motif_search(row["k"], row["t"], row["dna"]))
+        print(randomized_motif_search_runner(row["k"], row["t"], row["dna"]))
 
 
 if __name__ == '__main__':
