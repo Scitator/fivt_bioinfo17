@@ -1,8 +1,6 @@
 import numpy as np
 import pandas as pd
 import click
-import collections
-import itertools
 from joblib import Parallel, delayed
 
 
@@ -20,15 +18,14 @@ def one_hot_encoding(labels, n_label):
     return one_hot_label
 
 
-def make_profile(motifs, rseudocounts=True, excluded=1):
+def make_profile(motifs, pseudocounts=True):
     motifs = np.array([x for x in motifs]).reshape((len(motifs), -1))
     profiles = []
     for i in range(len(dnas)):
         dna_i = motifs == i
         profiles.append(dna_i.sum(axis=0) / float(motifs.shape[0]))
-    t = float(motifs.shape[0])
-    profiles = np.vstack(profiles) * (t/float(t-excluded))
-    if rseudocounts:
+    profiles = np.vstack(profiles)
+    if pseudocounts:
         profiles += np.ones_like(profiles)
     return profiles
 
@@ -73,21 +70,21 @@ def gibbs_sampler(k, t, N, dna):
     best_motifs = motifs.copy()
     for i in range(N):
         index = np.random.randint(t)
-        motifs[index] = np.ones(k) * -1.0
-        profile = make_profile(motifs, 1).T / float(t)
+        profile = make_profile(np.delete(motifs, index, axis=0)).T / float(t)
         motif_i = most_prob_row_kmer(dna[index], profile, k)
         motifs[index] = motif_i
         if score(motifs) < score(best_motifs):
-            best_motifs = motifs
+            best_motifs = motifs.copy()
     return best_motifs, score(best_motifs)
 
 
-def gibbs_sampler_runner(k, t, N, dna, n_jobs=-1, t_max=20, seed=42):
+def gibbs_sampler_runner(k, t, N, dna, n_jobs=-1, t_max=40, seed=42):
     # np.random.seed(seed)
     dna = np.array([dna2id[x] for x in dna]).reshape((t, -1))
     mofits = Parallel(n_jobs)(t_max * [delayed(gibbs_sampler)(k, t, N, dna)])
+    # mofits = [gibbs_sampler(k, t, N, dna)]
     mofits, scores = map(np.array, zip(*mofits))
-    best_motifs = mofits[scores.argmin()] 
+    best_motifs = mofits[scores.argmin()]
     result = ["".join(id2dna[x] for x in motif) for motif in best_motifs]
     return "\n".join(result)
 
