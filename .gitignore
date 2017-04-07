@@ -89,6 +89,6 @@ ENV/
 .ropeproject
 
 .idea
-
+.vscode
 tmp*
 log*
